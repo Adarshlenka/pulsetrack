@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+*.o
+*.out
+*.a
+*.d
+pulsetrack
+test_core
+
+# Runtime output
+*.log
+
+# Editor / IDE
+.vscode/
+.vs/
+*.swp
+*.swo
+.DS_Store
