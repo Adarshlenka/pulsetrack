@@ -28,6 +28,29 @@ Every point below is implemented and testable independently:
 9. **Logs the results** — every sample and every alert is timestamped and
    written to a log file.
 
+Additionally, a Linux kernel character device driver (`kernel/`) simulates
+the same pulse output in kernel space, with a userspace client
+demonstrating the syscalls used to read it — see the Kernel driver section
+below.
+
+## Project stages
+
+This project was built and documented in six stages, each with its own
+write-up in `docs/`:
+
+| Stage | Document |
+|---|---|
+| 1 — Introduction | [`docs/stage1_introduction.md`](docs/stage1_introduction.md) |
+| 2 — Requirements & Plan (PRD) | [`docs/stage2_requirements_and_plan.md`](docs/stage2_requirements_and_plan.md) |
+| 3 — Design & Architecture (incl. UML) | [`docs/stage3_design_and_architecture.md`](docs/stage3_design_and_architecture.md) |
+| 4 — Initial Implementation & Prototype | [`docs/stage4_prototype.md`](docs/stage4_prototype.md) |
+| 5 — Testing, Integration & Improvement | [`docs/stage5_testing_and_improvement.md`](docs/stage5_testing_and_improvement.md) |
+| 6 — Final Implementation & Presentation | [`docs/stage6_final_summary.md`](docs/stage6_final_summary.md) |
+
+The Git history mirrors these stages via a real branching strategy — see
+"Git repository and branching strategy" in Stage 3, and run
+`git log --oneline --graph --all` to see it directly.
+
 ## Real-world use case
 
 A real electricity meter counts usage by pulses: a small LED blinks (or a
@@ -68,6 +91,13 @@ shows live usage and sends high-usage alerts.
   ▼
 [Logger] → timestamped log file
 ```
+
+A second, independent component lives in `kernel/`: a Linux character
+device driver that generates and exposes pulses in kernel space, plus a
+userspace client that reads it via `open`/`read`/`close`. The two are not
+wired together at runtime in this submission — see
+[`docs/stage3_design_and_architecture.md`](docs/stage3_design_and_architecture.md)
+for the full two-component diagram and UML (class, sequence, state).
 
 ## Building and running
 
@@ -121,6 +151,20 @@ This builds and runs a self-contained, dependency-free suite of 55 checks
 covering the 9 functional points above plus edge cases (see "Verification"
 below).
 
+### Kernel driver
+
+```bash
+cd kernel
+make                                    # needs linux-headers-$(uname -r)
+sudo insmod pulsemeter_driver.ko
+cat /dev/pulsemeter
+sudo rmmod pulsemeter_driver
+```
+
+See [`kernel/README.md`](kernel/README.md) for what was actually verified
+where (compiled clean against real kbuild headers; not `insmod`-loaded in
+the development sandbox, for two specific, confirmed reasons given there).
+
 ## Verification (trust but verify)
 
 Nothing in this repo is asserted without having actually been run:
@@ -157,24 +201,26 @@ Nothing in this repo is asserted without having actually been run:
 | C++ (exceptions) | A typed exception hierarchy (`PulseTrackException` and subtypes) instead of error codes |
 | Linux (build toolchain) | Plain `Makefile` + `g++`/`clang++`, no IDE-specific project files |
 | Linux (shell scripting) | `scripts/build.sh`, `scripts/run.sh` |
-| Linux + Git | Real, incremental commit history (see `git log`) |
+| Linux + Git | Real, incremental commit history + branching strategy (see `git log --oneline --graph --all`) |
+| Linux Device Drivers | `kernel/pulsemeter_driver.c` — char device, kernel timer, interrupt-context-safe spinlock, device model registration |
+| Linux System Programming | `kernel/test/read_meter.c` — raw `open`/`read`/`close` syscalls against a device node |
 | Computer Architecture / hardware-software interaction | Discussed below |
 
-**Computer Architecture, honestly**: this project does not touch real
-hardware or the kernel, and that is a deliberate choice, not an oversight.
-The natural, correct engineering approach for reading a real meter's pulse
-signal on Linux is to poll it from userspace via the kernel's existing
-`libgpiod` GPIO interface — not to write a custom kernel driver — and a
-single-process design does not need inter-process shared memory or a
-kernel module either. Writing those anyway would have added real
-complexity (kernel headers, `insmod`, IPC synchronization) that this exact
-problem does not call for, just to check a syllabus box. Where this
-project *does* engage with hardware/software boundary concepts is in how
-the pulse generator and counter are built: fixed-width atomic integers
-(`std::atomic<uint64_t>`) for lock-free, hardware-level-safe concurrent
-counting, and `std::this_thread::sleep_for` for OS-scheduler-backed timing
-— both genuine points of contact between C++ code and how the underlying
-hardware/OS executes it.
+**Computer Architecture / hardware-software boundary, honestly**: the
+userspace pipeline's contact with hardware is indirect but real —
+fixed-width atomic integers (`std::atomic<uint64_t>`) for lock-free,
+hardware-level-safe concurrent counting, and `std::this_thread::sleep_for`
+for OS-scheduler-backed timing. The kernel driver engages with it directly:
+a spinlock with IRQ save/restore (`spin_lock_irqsave`) is used specifically
+*because* its timer callback runs in softirq/interrupt context, where a
+mutex would be unsafe (it can sleep; interrupt context can't). Note on
+scope: the natural, minimal way to read a *real* meter's pulse signal on
+Linux is to poll it from userspace via the kernel's existing `libgpiod`
+GPIO interface, not a custom driver — this project includes a real
+character device driver anyway because Linux Device Drivers is an
+explicitly required, separately graded topic for this submission, not
+because the meter itself demands kernel-space code. That tradeoff is
+stated here rather than left implicit.
 
 ## Pushing to GitHub
 
@@ -184,8 +230,10 @@ browser:
 
 ```bash
 git remote add origin https://github.com/<your-username>/pulsetrack.git
-git push -u origin main
+git push -u origin master
+git push origin dev feature/kernel-driver feature/stage-docs
 ```
 
-The full commit history (project scaffold → core implementation → tests →
-docs) pushes along with the code.
+Pushing all branches (not just `master`) is what makes the branching
+strategy in Stage 3 actually visible on GitHub — the `feature/* → dev →
+master` merge history, not just the final state.
