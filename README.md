@@ -240,9 +240,12 @@ master` merge history, not just the final state.
 
 
 AUTHOR
+
 Adarsh Lenka
+
 B.Tech Computer Science Engineering 
 Institute of Technical Educational & Research (ITER), SOA University
 
 License
+
 This project is intended for academic and educational purposes.
