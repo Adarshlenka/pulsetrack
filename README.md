@@ -237,3 +237,10 @@ git push origin dev feature/kernel-driver feature/stage-docs
 Pushing all branches (not just `master`) is what makes the branching
 strategy in Stage 3 actually visible on GitHub — the `feature/* → dev →
 master` merge history, not just the final state.
+AUTHOR
+Adarsh Lenka
+B.Tech Computer Science Engineering 
+Institute of Technical Educational & Research (ITER), SOA University
+
+License
+This project is intended for academic and educational purposes.
